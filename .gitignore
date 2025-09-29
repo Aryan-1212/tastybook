@@ -1,0 +1,56 @@
+# PHP & Composer
+/vendor/
+composer.lock
+
+# XAMPP/Local
+*.log
+*.sql
+*.sqlite
+*.sqlite3
+*.env
+.env.*
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.bak
+*.tmp
+*.swp
+*.swo
+
+# User uploads
+public/uploads/
+recipes/public/uploads/
+
+# OS
+Desktop.ini
+
+# Node/npm (if any)
+node_modules/
+
+# Cache
+.cache/
+.cache-loader/
+
+# Test/Debug
+*.test.php
+tmp_*
+
+# Ignore database config (if you want to keep credentials private)
+db/config.php
+
+db/database.php
+
+# Ignore any backup or temp files
+*~
+
+# Ignore coverage reports
+coverage/
+
+# Ignore session files
+sessions/
+
+# Ignore setup/test scripts
+setup.php
+test-connection.php
+tmp_list_tables.php
