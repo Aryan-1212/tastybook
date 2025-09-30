@@ -17,7 +17,14 @@ $page = max(1, (int)($_GET['page'] ?? 1));
 $perPage = 12;
 
 // Build query
-$whereConditions = ['r.is_published = 1'];
+$whereConditions = ["(r.approval_status = 'approved')"];
+// Allow owners to see their own recipes even if pending
+if (isLoggedIn()) {
+    $whereConditions[] = '(r.user_id = ' . (int)getCurrentUserId() . ')';
+    // Wrap owner OR approved in parentheses
+    $whereClauseOwner = '(' . implode(' OR ', $whereConditions) . ')';
+    $whereConditions = [$whereClauseOwner];
+}
 $params = [];
 
 if (!empty($search)) {
@@ -78,6 +85,33 @@ $stmt->execute();
 $categories = $stmt->fetchAll();
 
 $pageTitle = 'Recipes';
+
+// Add CSS for recipe cards and ribbons
+echo '
+<style>
+.recipe-card {
+    position: relative;
+    overflow: hidden;
+}
+
+.recipe-card .ribbon {
+    position: absolute;
+    top: 15px;
+    right: -30px;
+    transform: rotate(45deg);
+    background: #ffd700;
+    padding: 5px 40px;
+    color: #000;
+    font-weight: bold;
+    z-index: 2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.recipe-card:hover .ribbon {
+    display: block !important;
+}
+</style>
+';
 ?>
 
 <section class="search-section">
@@ -141,6 +175,9 @@ $pageTitle = 'Recipes';
             <div class="recipes-grid">
                 <?php foreach ($recipes as $recipe): ?>
                     <div class="recipe-card">
+                        <?php if (!empty($recipe['is_top_of_week'])): ?>
+                        <div class="ribbon"><span>Top of the Week</span></div>
+                        <?php endif; ?>
                         <div class="recipe-image">
                             <?php if ($recipe['image_url']): ?>
                                 <img src="/TastyBook/recipes/public/uploads/<?php echo htmlspecialchars($recipe['image_url']); ?>" 
@@ -183,6 +220,9 @@ $pageTitle = 'Recipes';
                             <div class="recipe-author">
                                 <span>By <?php echo htmlspecialchars($recipe['first_name'] . ' ' . $recipe['last_name']); ?></span>
                             </div>
+                            <?php if (!empty($recipe['quality']) && $recipe['quality'] === 'good'): ?>
+                                <div class="status-badge" style="background:#e8f5e8;color:#2e7d32;display:inline-block;margin:.5rem 0;">Good</div>
+                            <?php endif; ?>
                             
                             <a href="recipe-details.php?id=<?php echo $recipe['id']; ?>" class="btn btn-secondary">View Recipe</a>
                         </div>

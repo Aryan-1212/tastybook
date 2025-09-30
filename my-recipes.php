@@ -98,9 +98,13 @@ $pageTitle = 'My Recipes';
                             <?php endif; ?>
                             
                             <div class="recipe-status">
-                                <span class="status-badge <?php echo $recipe['is_published'] ? 'published' : 'draft'; ?>">
-                                    <?php echo $recipe['is_published'] ? 'Published' : 'Draft'; ?>
-                                </span>
+                                <?php if ($recipe['approval_status'] === 'pending'): ?>
+                                    <span class="status-badge draft">Pending Approval</span>
+                                <?php elseif ($recipe['approval_status'] === 'rejected'): ?>
+                                    <span class="status-badge draft">Rejected</span>
+                                <?php else: ?>
+                                    <span class="status-badge published">Published</span>
+                                <?php endif; ?>
                             </div>
                             
                             <div class="recipe-actions">

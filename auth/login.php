@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $isEmail = filter_var($username, FILTER_VALIDATE_EMAIL);
                 $field = $isEmail ? 'email' : 'username';
                 
-                $stmt = $db->prepare("SELECT id, username, email, password_hash, first_name, last_name, is_active FROM users WHERE {$field} = ?");
+                $stmt = $db->prepare("SELECT id, username, email, password_hash, first_name, last_name, is_active, role FROM users WHERE {$field} = ?");
                 $stmt->execute([$username]);
                 $user = $stmt->fetch();
                 
@@ -47,6 +47,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['user_id'] = $user['id'];
                     $_SESSION['username'] = $user['username'];
                     $_SESSION['first_name'] = $user['first_name'];
+                    $_SESSION['role'] = $user['role'] ?? 'user';
                     
                     // Set remember me cookie if requested
                     if ($remember) {

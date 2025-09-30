@@ -39,7 +39,7 @@ $stmt = $db->prepare("
     JOIN categories c ON r.category_id = c.id
     JOIN users u ON r.user_id = u.id
     LEFT JOIN reviews rev ON r.id = rev.recipe_id
-    WHERE f.user_id = ? AND r.is_published = 1
+    WHERE f.user_id = ? AND r.is_published = 1 AND r.approval_status = 'approved'
     GROUP BY r.id
     ORDER BY f.created_at DESC
     LIMIT 10

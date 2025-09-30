@@ -16,7 +16,7 @@ $db = new Database();
 $user = getCurrentUser();
 
 // Simple admin check (in production, you'd have a proper role system)
-if ($user['username'] !== 'admin') {
+if (!isAdmin()) {
     setFlashMessage('error', 'Access denied. Admin privileges required.');
     redirect('dashboard.php');
 }
@@ -58,6 +58,13 @@ try {
         ORDER BY r.created_at DESC 
         LIMIT 5
     ");
+$pending = [];
+try {
+    $stmt = $db->prepare("SELECT r.id, r.title, r.created_at, u.first_name, u.last_name FROM recipes r JOIN users u ON r.user_id = u.id WHERE r.approval_status = 'pending' ORDER BY r.created_at ASC LIMIT 20");
+    $stmt->execute();
+    $pending = $stmt->fetchAll();
+} catch (Exception $e) { $pending = []; }
+
     $stmt->execute();
     $recentRecipes = $stmt->fetchAll();
 
@@ -124,6 +131,136 @@ $pageTitle = 'Admin Panel';
         </div>
 
         <div class="admin-content">
+            <div class="admin-section">
+                <h2>Users</h2>
+                <div class="admin-table">
+                    <?php
+                    try {
+                        $stmt = $db->prepare("SELECT id, username, first_name, last_name, email, role, points_total, created_at FROM users ORDER BY created_at DESC LIMIT 50");
+                        $stmt->execute();
+                        $users = $stmt->fetchAll();
+                    } catch (Exception $e) { $users = []; }
+                    ?>
+                    <?php if (!empty($users)): ?>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>User</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Total Points</th>
+                                    <th>Joined</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($users as $row): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($row['first_name'] . ' ' . $row['last_name']); ?> (<?php echo htmlspecialchars($row['username']); ?>)</td>
+                                        <td><?php echo htmlspecialchars($row['email']); ?></td>
+                                        <td><?php echo htmlspecialchars(ucfirst($row['role'])); ?></td>
+                                        <td><?php echo (int)$row['points_total']; ?></td>
+                                        <td><?php echo date('M j, Y', strtotime($row['created_at'])); ?></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p>No users found.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="admin-section">
+                <h2>Pending Recipe Approvals</h2>
+                <div class="admin-table">
+                    <?php if (!empty($pending)): ?>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Recipe</th>
+                                    <th>Author</th>
+                                    <th>Submitted</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($pending as $p): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($p['title']); ?></td>
+                                        <td><?php echo htmlspecialchars($p['first_name'] . ' ' . $p['last_name']); ?></td>
+                                        <td><?php echo date('M j, Y H:i', strtotime($p['created_at'])); ?></td>
+                                        <td>
+                                            <form method="post" action="recipes/edit-recipe.php" style="display:inline;">
+                                                <input type="hidden" name="action" value="admin_approve">
+                                                <input type="hidden" name="recipe_id" value="<?php echo $p['id']; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
+                                                <button class="btn btn-primary">Approve</button>
+                                            </form>
+                                            <form method="post" action="recipes/edit-recipe.php" style="display:inline; margin-left: .5rem;">
+                                                <input type="hidden" name="action" value="admin_reject">
+                                                <input type="hidden" name="recipe_id" value="<?php echo $p['id']; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
+                                                <button class="btn btn-outline">Reject</button>
+                                            </form>
+                                            <form method="post" action="recipes/edit-recipe.php" style="display:inline; margin-left: .5rem;">
+                                                <input type="hidden" name="action" value="admin_top">
+                                                <input type="hidden" name="recipe_id" value="<?php echo $p['id']; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
+                                                <button class="btn btn-secondary">Mark Top</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p>No pending recipes.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
+
+            <div class="admin-section">
+                <h2>Mark Recipes as Good</h2>
+                <div class="admin-table">
+                    <?php
+                    try {
+                        $stmt = $db->prepare("SELECT r.id, r.title, r.created_at, r.quality, u.first_name, u.last_name FROM recipes r JOIN users u ON r.user_id = u.id WHERE r.approval_status = 'approved' ORDER BY r.created_at DESC LIMIT 20");
+                        $stmt->execute();
+                        $approved = $stmt->fetchAll();
+                    } catch (Exception $e) { $approved = []; }
+                    ?>
+                    <?php if (!empty($approved)): ?>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Recipe</th>
+                                    <th>Author</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($approved as $r): ?>
+                                    <tr>
+                                        <td><?php echo htmlspecialchars($r['title']); ?></td>
+                                        <td><?php echo htmlspecialchars($r['first_name'] . ' ' . $r['last_name']); ?></td>
+                                        <td><?php echo htmlspecialchars(ucfirst($r['quality'])); ?></td>
+                                        <td>
+                                            <form method="post" action="recipes/edit-recipe.php" style="display:inline;">
+                                                <input type="hidden" name="action" value="admin_good">
+                                                <input type="hidden" name="recipe_id" value="<?php echo $r['id']; ?>">
+                                                <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
+                                                <button class="btn btn-secondary">Mark Good</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    <?php else: ?>
+                        <p>No approved recipes yet.</p>
+                    <?php endif; ?>
+                </div>
+            </div>
             <div class="admin-section">
                 <h2>Recent Users</h2>
                 <div class="admin-table">

@@ -85,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $db = new Database();
                 
-                $stmt = $db->prepare("INSERT INTO recipes (title, description, ingredients, instructions, prep_time, cook_time, servings, difficulty, category_id, user_id, image_url, tips, tags, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+                $stmt = $db->prepare("INSERT INTO recipes (title, description, ingredients, instructions, prep_time, cook_time, servings, difficulty, category_id, user_id, image_url, tips, tags, is_published, approval_status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'pending', NOW())");
                 $stmt->execute([
                     $title, $description, $ingredients, $instructions, 
                     $prepTime, $cookTime, $servings, $difficulty, 
@@ -94,8 +94,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 $recipeId = $db->lastInsertId();
                 
-                setFlashMessage('success', 'Recipe added successfully!');
-                redirect("recipe-details.php?id={$recipeId}");
+                setFlashMessage('success', 'Recipe submitted! Awaiting admin approval.');
+                redirect("/TastyBook/my-recipes.php");
                 
             } catch (Exception $e) {
                 error_log("Recipe creation error: " . $e->getMessage());

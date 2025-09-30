@@ -86,8 +86,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $passwordHash = password_hash($password, PASSWORD_DEFAULT);
                     
                     $stmt = $db->prepare("
-                        INSERT INTO users (username, email, password_hash, first_name, last_name, is_active, created_at) 
-                        VALUES (?, ?, ?, ?, ?, 1, NOW())
+                        INSERT INTO users (username, email, password_hash, first_name, last_name, role, is_active, created_at) 
+                        VALUES (?, ?, ?, ?, ?, 'user', 1, NOW())
                     ");
                     $stmt->execute([$username, $email, $passwordHash, $firstName, $lastName]);
                     

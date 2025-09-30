@@ -1,0 +1,94 @@
+.account-statistics {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 16px;
+    padding: 2rem;
+    margin: 2rem 0;
+    color: white;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.statistics-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    letter-spacing: 1px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.statistics-title i {
+    margin-right: 0.75rem;
+    color: #fbbf24;
+}
+
+.points-badge {
+    background: rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 1.5rem;
+    backdrop-filter: blur(5px);
+}
+
+.points-content {
+    text-align: center;
+}
+
+.points-total {
+    margin-bottom: 1.5rem;
+}
+
+.points-total .number {
+    font-size: 3.5rem;
+    font-weight: 700;
+    display: block;
+    margin-bottom: 0.5rem;
+    color: #fbbf24;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.points-total .label {
+    font-size: 1.1rem;
+    font-weight: 600;
+    letter-spacing: 2px;
+}
+
+.badge-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+}
+
+.current-badge {
+    font-size: 1.25rem;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    background: rgba(255,255,255,0.15);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.current-badge i {
+    color: #fbbf24;
+    font-size: 1.5rem;
+}
+
+.redeem-link .btn {
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    border: none;
+    background: #fbbf24;
+    color: #1a1a1a;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: all 0.3s ease;
+}
+
+.redeem-link .btn:hover {
+    background: #f59e0b;
+    transform: translateY(-2px);
+}

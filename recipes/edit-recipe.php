@@ -12,7 +12,7 @@ if (!isLoggedIn()) {
     redirect('auth/login.php?redirect=' . urlencode($_SERVER['REQUEST_URI']));
 }
 
-$recipeId = (int)($_GET['id'] ?? 0);
+$recipeId = (int)($_GET['id'] ?? ($_POST['recipe_id'] ?? 0));
 
 if ($recipeId <= 0) {
     setFlashMessage('error', 'Invalid recipe ID.');
@@ -21,7 +21,54 @@ if ($recipeId <= 0) {
 
 $db = new Database();
 
-// Get recipe details
+// If admin actions: handle approve/reject/top and exit
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isAdmin() && isset($_POST['action']) && in_array($_POST['action'], ['admin_approve','admin_reject','admin_top','admin_good'])) {
+    if (!verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+        setFlashMessage('error', 'Invalid request.');
+        redirect('/TastyBook/admin.php');
+    }
+    $action = $_POST['action'];
+    try {
+        if ($action === 'admin_approve') {
+            $stmt = $db->prepare("UPDATE recipes SET approval_status = 'approved', is_published = 1, approved_at = NOW(), approved_by = ? WHERE id = ?");
+            $stmt->execute([getCurrentUserId(), $recipeId]);
+            // Award +10 to owner for approval
+            $stmt = $db->prepare("SELECT user_id FROM recipes WHERE id = ?");
+            $stmt->execute([$recipeId]);
+            $ownerId = (int)$stmt->fetchColumn();
+            if ($ownerId) {
+                awardPoints($ownerId, 10, 'recipe_approved', $recipeId);
+                maybeAwardFiveDayStreak($ownerId);
+            }
+            setFlashMessage('success', 'Recipe approved.');
+        } elseif ($action === 'admin_reject') {
+            $stmt = $db->prepare("UPDATE recipes SET approval_status = 'rejected', is_published = 0 WHERE id = ?");
+            $stmt->execute([$recipeId]);
+            setFlashMessage('info', 'Recipe rejected.');
+        } elseif ($action === 'admin_top') {
+            $stmt = $db->prepare("UPDATE recipes SET is_top_of_week = 1, top_of_week_at = NOW() WHERE id = ?");
+            $stmt->execute([$recipeId]);
+            // Award +50 to owner
+            $stmt = $db->prepare("SELECT user_id FROM recipes WHERE id = ?");
+            $stmt->execute([$recipeId]);
+            $ownerId = (int)$stmt->fetchColumn();
+            if ($ownerId) {
+                awardPoints($ownerId, 50, 'top_of_week', $recipeId);
+            }
+            setFlashMessage('success', 'Marked as Top Recipe of the Week.');
+        } elseif ($action === 'admin_good') {
+            $stmt = $db->prepare("UPDATE recipes SET quality = 'good' WHERE id = ?");
+            $stmt->execute([$recipeId]);
+            setFlashMessage('success', 'Marked recipe as Good.');
+        }
+    } catch (Exception $e) {
+        error_log('Admin recipe action: ' . $e->getMessage());
+        setFlashMessage('error', 'Failed to update recipe.');
+    }
+    redirect('/TastyBook/admin.php');
+}
+
+// Get recipe details (owner only)
 $stmt = $db->prepare("SELECT * FROM recipes WHERE id = ? AND user_id = ?");
 $stmt->execute([$recipeId, getCurrentUserId()]);
 $recipe = $stmt->fetch();

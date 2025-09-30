@@ -70,9 +70,10 @@ $currentUser = getCurrentUser();
                             <a href="/TastyBook/profile.php"><i class="fas fa-user"></i> Profile</a>
                             <a href="/TastyBook/my-recipes.php"><i class="fas fa-book"></i> My Recipes</a>
                             <a href="/TastyBook/favorites.php"><i class="fas fa-heart"></i> Favorites</a>
-                            <?php if ($currentUser['username'] === 'admin'): ?>
+                            <?php if (isAdmin()): ?>
                             <a href="/TastyBook/admin.php"><i class="fas fa-cog"></i> Admin Panel</a>
                             <?php endif; ?>
+                            <a href="/TastyBook/leaderboard.php"><i class="fas fa-trophy"></i> Leaderboard</a>
                             <a href="/TastyBook/auth/logout.php"><i class="fas fa-sign-out-alt"></i> Logout</a>
                         </div>
                     </div>

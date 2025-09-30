@@ -13,16 +13,116 @@ $featuredRecipes = [];
 try {
     $stmt = $db->prepare("
         SELECT r.*, c.name as category_name, u.first_name, u.last_name,
-               AVG(rev.rating) as avg_rating, COUNT(rev.id) as review_count
+               AVG(rev.rating) as avg_rating, COUNT(rev.id) as review_count,
+               r.is_featured, r.is_good, r.is_best
         FROM recipes r 
         JOIN categories c ON r.category_id = c.id 
         JOIN users u ON r.user_id = u.id 
         LEFT JOIN reviews rev ON r.id = rev.recipe_id
-        WHERE r.is_published = 1
+            WHERE r.approval_status = 'approved' AND r.is_featured = 1
         GROUP BY r.id
-        ORDER BY r.created_at DESC
+            ORDER BY r.is_best DESC, r.is_good DESC, r.created_at DESC
         LIMIT 6
     ");
+    
+    // Add CSS for recipe cards and ribbons
+    echo '
+    <style>
+    .recipe-card {
+        position: relative;
+        overflow: hidden;
+    }
+    
+        .status-badges {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            z-index: 2;
+        }
+    
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+    
+        .status-badge i {
+            font-size: 14px;
+        }
+    
+        .status-badge.best {
+            background: #4299e1;
+            color: white;
+        }
+    
+        .status-badge.good {
+            background: #48bb78;
+            color: white;
+        }
+    
+        .status-badge.featured {
+            background: #ecc94b;
+            color: black;
+        }
+    
+        .ribbon {
+        position: absolute;
+        top: 15px;
+        right: -30px;
+        transform: rotate(45deg);
+        background: #ffd700;
+        padding: 5px 40px;
+        color: #000;
+        font-weight: bold;
+        z-index: 2;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    
+    .recipe-card:hover .status-badges {
+        opacity: 1;
+    }
+    
+    .status-badges {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        z-index: 2;
+    }
+    
+    .status-badge {
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    
+    .status-badge.best {
+        background: #4299e1;
+        color: white;
+    }
+    
+    .status-badge.good {
+        background: #48bb78;
+        color: white;
+    }
+    
+    .status-badge.featured {
+        background: #ecc94b;
+        color: black;
+    }
+    </style>
+    ';
     $stmt->execute();
     $featuredRecipes = $stmt->fetchAll();
 } catch (Exception $e) {
@@ -158,6 +258,23 @@ $pageTitle = 'Home';
                 <?php foreach ($featuredRecipes as $recipe): ?>
                     <div class="recipe-card">
                         <div class="recipe-image">
+                                <div class="status-badges">
+                                <?php if ($recipe['is_best']): ?>
+                                <div class="status-badge best">
+                                    <i class="fas fa-crown"></i> Best Recipe
+                                </div>
+                                <?php endif; ?>
+                                <?php if ($recipe['is_good']): ?>
+                                <div class="status-badge good">
+                                    <i class="fas fa-thumbs-up"></i> Good Recipe
+                                </div>
+                                <?php endif; ?>
+                                <?php if ($recipe['is_featured']): ?>
+                                <div class="status-badge featured">
+                                    <i class="fas fa-star"></i> Featured
+                                </div>
+                            <?php endif; ?>
+                                </div>
                             <?php if ($recipe['image_url']): ?>
                                 <img src="/TastyBook/recipes/public/uploads/<?php echo htmlspecialchars($recipe['image_url']); ?>" 
                                      alt="<?php echo htmlspecialchars($recipe['title']); ?>">
@@ -194,6 +311,9 @@ $pageTitle = 'Home';
                                     </div>
                                     <span class="rating-text"><?php echo number_format($recipe['avg_rating'], 1); ?></span>
                                 </div>
+                            <?php endif; ?>
+                            <?php if (!empty($recipe['quality']) && $recipe['quality'] === 'good'): ?>
+                                <div class="status-badge" style="background:#e8f5e8;color:#2e7d32;display:inline-block;margin:.5rem 0;">Good</div>
                             <?php endif; ?>
                             
                             <a href="recipes/recipe-details.php?id=<?php echo $recipe['id']; ?>" class="btn btn-secondary">View Recipe</a>

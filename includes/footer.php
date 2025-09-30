@@ -29,6 +29,7 @@
                         <?php endif; ?>
                         <li><a href="/TastyBook/about.php">About</a></li>
                         <li><a href="/TastyBook/contact.php">Contact</a></li>
+                        <li><a href="/TastyBook/leaderboard.php">Leaderboard</a></li>
                         <!-- <li><a href="/TastyBook/sitemap.php">Sitemap</a></li> -->
                     </ul>
                 </div>

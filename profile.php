@@ -6,6 +6,9 @@
 
 require_once __DIR__ . '/includes/header.php';
 
+// Add profile statistics CSS
+echo '<link rel="stylesheet" href="/TastyBook/public/css/profile-statistics.css">';
+
 // Check if user is logged in
 if (!isLoggedIn()) {
     setFlashMessage('error', 'You must be logged in to view your profile.');
@@ -200,6 +203,33 @@ $pageTitle = 'My Profile';
                     <div class="stat-item">
                         <div class="stat-number"><?php echo $reviewCount; ?></div>
                         <div class="stat-label">Reviews Given</div>
+                    </div>
+                </div>
+                <div class="account-statistics">
+                    <h2 class="statistics-title">
+                        <i class="fas fa-chart-bar"></i>
+                        ACCOUNT STATISTICS
+                    </h2>
+                    <div class="points-badge">
+                        <?php $badge = getBadgeForPoints($user['points_total'] ?? 0); ?>
+                        <div class="points-content">
+                            <div class="points-total">
+                                <span class="number"><?php echo (int)($user['points_total'] ?? 0); ?></span>
+                                <span class="label">TOTAL POINTS</span>
+                            </div>
+                            <div class="badge-info">
+                                <div class="current-badge">
+                                    <i class="fas fa-medal"></i>
+                                    <span><?php echo htmlspecialchars($badge); ?></span>
+                                </div>
+                                <div class="redeem-link">
+                                    <a href="redeem.php" class="btn btn-primary">
+                                        <i class="fas fa-gift"></i>
+                                        Redeem Rewards
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

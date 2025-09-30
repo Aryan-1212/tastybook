@@ -46,6 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             // Add to favorites
             $stmt = $db->prepare("INSERT INTO favorites (user_id, recipe_id, created_at) VALUES (?, ?, NOW())");
             $stmt->execute([$userId, $recipeId]);
+            // Award +2 to owner for each favorite
+            $ownerStmt = $db->prepare("SELECT user_id FROM recipes WHERE id = ?");
+            $ownerStmt->execute([$recipeId]);
+            $ownerId = (int)$ownerStmt->fetchColumn();
+            if ($ownerId && $ownerId !== $userId) {
+                awardPoints($ownerId, 2, 'favorite_received', $recipeId);
+                maybeAwardFavoritesBonus($recipeId, $ownerId);
+            }
             echo json_encode([
                 'success'   => true,
                 'favorited' => true,
@@ -62,6 +70,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 
 require_once __DIR__ . '/../includes/header.php';
 
+// Add recipe details CSS
+echo '<link rel="stylesheet" href="/TastyBook/public/css/recipe-details.css">';
+
+// Handle admin actions
+if (isAdmin() && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && verifyCSRFToken($_POST['csrf_token'] ?? '')) {
+    require_once __DIR__ . '/../db/database.php';
+    $db = new Database();
+    
+    $recipeId = (int)$_POST['recipe_id'];
+    $status = $_POST['status'] === '1' ? 1 : 0;
+    
+    try {
+        switch($_POST['action']) {
+            case 'mark_featured':
+                $stmt = $db->prepare("UPDATE recipes SET is_featured = ? WHERE id = ?");
+                $message = $status ? 'Recipe marked as featured!' : 'Recipe removed from featured.';
+                break;
+                
+            case 'mark_good':
+                $stmt = $db->prepare("UPDATE recipes SET is_good = ? WHERE id = ?");
+                $message = $status ? 'Recipe marked as good!' : 'Recipe removed from good status.';
+                break;
+                
+            case 'mark_best':
+                $stmt = $db->prepare("UPDATE recipes SET is_best = ? WHERE id = ?");
+                $message = $status ? 'Recipe marked as best!' : 'Recipe removed from best status.';
+                break;
+        }
+        
+        if (isset($stmt)) {
+            $stmt->execute([$status, $recipeId]);
+            setFlashMessage('success', $message);
+            redirect($_SERVER['REQUEST_URI']);
+            exit;
+        }
+    } catch (Exception $e) {
+        error_log("Recipe status update error: " . $e->getMessage());
+        setFlashMessage('error', 'Failed to update recipe status.');
+        redirect($_SERVER['REQUEST_URI']);
+        exit;
+    }
+}
+
 $recipeId = (int)($_GET['id'] ?? 0);
 
 if ($recipeId <= 0) {
@@ -72,20 +123,40 @@ if ($recipeId <= 0) {
 $db = new Database();
 
 // Get recipe details
+$ownerIdParam = isLoggedIn() ? (int)getCurrentUserId() : 0;
 $stmt = $db->prepare("
-    SELECT r.*, c.name as category_name, u.username, u.first_name, u.last_name 
+    SELECT 
+        r.*,
+        c.name as category_name,
+        u.username,
+        u.first_name,
+        u.last_name,
+        COALESCE(r.is_featured, 0) as is_featured,
+        COALESCE(r.is_good, 0) as is_good,
+        COALESCE(r.is_best, 0) as is_best,
+        (SELECT username FROM users WHERE id = r.approved_by) as approved_by_name
     FROM recipes r 
     JOIN categories c ON r.category_id = c.id 
     JOIN users u ON r.user_id = u.id 
-    WHERE r.id = ? AND r.is_published = 1
+    WHERE r.id = ? AND (
+        r.approval_status = 'approved' 
+        OR r.approval_status IS NULL 
+        OR r.approval_status = '' 
+        OR r.is_published = 1 
+        OR r.user_id = ?
+        OR " . (isAdmin() ? "1" : "0") . "
+    )
 ");
-$stmt->execute([$recipeId]);
+$stmt->execute([$recipeId, $ownerIdParam]);
 $recipe = $stmt->fetch();
 
 if (!$recipe) {
     setFlashMessage('error', 'Recipe not found.');
     redirect('/TastyBook/recipes/recipes.php');
 }
+
+// Get top recipe status
+$recipe['is_top'] = (bool)($recipe['is_top'] ?? false);
 
 // Get reviews for this recipe
 $stmt = $db->prepare("
@@ -146,6 +217,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
                         // Add new review
                         $stmt = $db->prepare("INSERT INTO reviews (user_id, recipe_id, rating, comment, created_at) VALUES (?, ?, ?, ?, NOW())");
                         $stmt->execute([getCurrentUserId(), $recipeId, $rating, $comment]);
+                        // Award +2 to owner for each comment/review
+                        $ownerStmt = $db->prepare("SELECT user_id FROM recipes WHERE id = ?");
+                        $ownerStmt->execute([$recipeId]);
+                        $ownerId = (int)$ownerStmt->fetchColumn();
+                        if ($ownerId && $ownerId !== getCurrentUserId()) {
+                            awardPoints($ownerId, 2, 'review_received', $recipeId);
+                        }
                         setFlashMessage('success', 'Review added successfully!');
                     }
                     
@@ -224,6 +302,98 @@ $pageTitle = $recipe['title'];
         <div class="recipe-header">
             <h1><?php echo htmlspecialchars($recipe['title']); ?></h1>
             
+            <div class="recipe-status-badges">
+                <?php if ($recipe['is_featured']): ?>
+                <div class="status-badge featured">
+                    <i class="fas fa-star"></i> Featured Recipe
+                </div>
+                <?php endif; ?>
+                
+                <?php if ($recipe['is_good']): ?>
+                <div class="status-badge good">
+                    <i class="fas fa-thumbs-up"></i> Good Recipe
+                </div>
+                <?php endif; ?>
+                
+                <?php if ($recipe['is_best']): ?>
+                <div class="status-badge best">
+                    <i class="fas fa-crown"></i> Best Recipe
+                </div>
+                <?php endif; ?>
+            </div>
+            
+            <?php if (isAdmin()): ?>
+            <div class="admin-controls">
+                <!-- Recipe Status Controls -->
+                <div class="status-controls">
+                    <h3>Recipe Status Controls</h3>
+                    <div class="control-buttons">
+                        <!-- Featured Status -->
+                        <form method="POST" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                            <input type="hidden" name="action" value="mark_featured">
+                            <input type="hidden" name="recipe_id" value="<?php echo $recipeId; ?>">
+                            <input type="hidden" name="status" value="<?php echo $recipe['is_featured'] ? '0' : '1'; ?>">
+                                <button type="submit" class="btn <?php echo $recipe['is_featured'] ? 'btn-warning' : 'btn-primary'; ?>">
+                                <i class="fas <?php echo $recipe['is_featured'] ? 'fa-times' : 'fa-star'; ?>"></i>
+                                    <?php echo $recipe['is_featured'] ? 'Unmark Featured' : 'Mark as Featured'; ?>
+                            </button>
+                        </form>
+                        
+                        <!-- Good Status -->
+                        <form method="POST" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                            <input type="hidden" name="action" value="mark_good">
+                            <input type="hidden" name="recipe_id" value="<?php echo $recipeId; ?>">
+                            <input type="hidden" name="status" value="<?php echo $recipe['is_good'] ? '0' : '1'; ?>">
+                                <button type="submit" class="btn <?php echo $recipe['is_good'] ? 'btn-warning' : 'btn-primary'; ?>">
+                                <i class="fas <?php echo $recipe['is_good'] ? 'fa-times' : 'fa-thumbs-up'; ?>"></i>
+                                    <?php echo $recipe['is_good'] ? 'Unmark Good' : 'Mark as Good'; ?>
+                            </button>
+                        </form>
+                        
+                        <!-- Best Status -->
+                        <form method="POST" class="admin-form">
+                            <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                            <input type="hidden" name="action" value="mark_best">
+                            <input type="hidden" name="recipe_id" value="<?php echo $recipeId; ?>">
+                            <input type="hidden" name="status" value="<?php echo $recipe['is_best'] ? '0' : '1'; ?>">
+                                <button type="submit" class="btn <?php echo $recipe['is_best'] ? 'btn-warning' : 'btn-primary'; ?>">
+                                <i class="fas <?php echo $recipe['is_best'] ? 'fa-times' : 'fa-crown'; ?>"></i>
+                                    <?php echo $recipe['is_best'] ? 'Unmark Best' : 'Mark as Best'; ?>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Approval Controls -->
+                <?php if ($recipe['approval_status'] !== 'approved'): ?>
+                <div class="approval-controls">
+                    <h3>Approval Controls</h3>
+                    <form method="POST" class="admin-form">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                        <input type="hidden" name="action" value="update_approval">
+                        <input type="hidden" name="recipe_id" value="<?php echo $recipeId; ?>">
+                        <input type="hidden" name="approval_status" value="approved">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-check"></i> Approve Recipe
+                        </button>
+                    </form>
+                    
+                    <form method="POST" class="admin-form">
+                        <input type="hidden" name="csrf_token" value="<?php echo $_SESSION['csrf_token'] ?? ''; ?>">
+                        <input type="hidden" name="action" value="update_approval">
+                        <input type="hidden" name="recipe_id" value="<?php echo $recipeId; ?>">
+                        <input type="hidden" name="approval_status" value="rejected">
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-times"></i> Reject Recipe
+                        </button>
+                    </form>
+                </div>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            
             <?php if ($recipe['image_url']): ?>
                 <img src="/TastyBook/recipes/public/uploads/<?php echo htmlspecialchars($recipe['image_url']); ?>?v=<?php echo time(); ?>" alt="<?php echo htmlspecialchars($recipe['title']); ?>">
             <?php else: ?>
@@ -262,6 +432,18 @@ $pageTitle = $recipe['title'];
                     <a href="edit-recipe.php?id=<?php echo $recipeId; ?>" class="btn btn-outline">
                         <i class="fas fa-edit"></i> Edit Recipe
                     </a>
+                <?php endif; ?>
+
+                <?php if (isAdmin()): ?>
+                                    <form method="post" action="edit-recipe.php" style="display:inline; margin-left:.5rem;">
+                                        <input type="hidden" name="action" value="admin_top">
+                                        <input type="hidden" name="recipe_id" value="<?php echo $recipeId; ?>">
+                                        <input type="hidden" name="csrf_token" value="<?php echo generateCSRFToken(); ?>">
+                                        <input type="hidden" name="status" value="<?php echo $recipe['is_top'] ? '0' : '1'; ?>">
+                                        <button class="btn btn-secondary">
+                                            <?php echo $recipe['is_top'] ? 'Unmark Top of the week' : 'Mark Top of the week'; ?>
+                                        </button>
+                                    </form>
                 <?php endif; ?>
             </div>
         </div>

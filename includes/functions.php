@@ -127,9 +127,125 @@ function getCurrentUser() {
     }
     
     $db = new Database();
-    $stmt = $db->prepare("SELECT id, username, email, first_name, last_name, profile_image, bio FROM users WHERE id = ? AND is_active = 1");
+    $stmt = $db->prepare("SELECT id, username, email, first_name, last_name, profile_image, bio, role, points_total FROM users WHERE id = ? AND is_active = 1");
     $stmt->execute([getCurrentUserId()]);
     return $stmt->fetch();
+}
+
+/**
+ * Check if current user is admin
+ */
+function isAdmin() {
+    $user = getCurrentUser();
+    return $user && isset($user['role']) && $user['role'] === 'admin';
+}
+
+/**
+ * Get user by id
+ */
+function getUserById($userId) {
+    $db = new Database();
+    $stmt = $db->prepare("SELECT id, username, email, first_name, last_name, role, points_total, profile_image FROM users WHERE id = ?");
+    $stmt->execute([$userId]);
+    return $stmt->fetch();
+}
+
+/**
+ * Compute badge/level from total points
+ */
+function getBadgeForPoints($points) {
+    if ($points >= 1000) return 'Gold Chef';
+    if ($points >= 500) return 'Silver Chef';
+    if ($points >= 200) return 'Bronze Chef';
+    if ($points >= 50) return 'Beginner';
+    return 'Newbie';
+}
+
+/**
+ * Award points and record a transaction if not already awarded for unique actions
+ * $action examples: recipe_approved, favorite_received, review_received, bonus_10_favorites, streak_5_days, top_of_week
+ */
+function awardPoints($userId, $points, $action, $recipeId = null, $meta = []) {
+    try {
+        $db = new Database();
+        $db->beginTransaction();
+
+        // Ensure uniqueness for (user, recipe, action)
+        $stmt = $db->prepare("INSERT INTO points_transactions (user_id, recipe_id, action, points, meta, created_at) VALUES (?, ?, ?, ?, ?, NOW())");
+        $stmt->execute([
+            $userId,
+            $recipeId,
+            $action,
+            $points,
+            json_encode($meta)
+        ]);
+
+        // Update user's cached total
+        $stmt = $db->prepare("UPDATE users SET points_total = points_total + ? WHERE id = ?");
+        $stmt->execute([$points, $userId]);
+
+        $db->commit();
+        return true;
+    } catch (Exception $e) {
+        if (method_exists($db ?? null, 'rollback')) {
+            $db->rollback();
+        }
+        // Likely duplicate unique key - ignore silently
+        error_log('awardPoints skipped: ' . $e->getMessage());
+        return false;
+    }
+}
+
+/**
+ * Calculate favorites count for a recipe
+ */
+function getFavoritesCount($recipeId) {
+    $db = new Database();
+    $stmt = $db->prepare("SELECT COUNT(*) FROM favorites WHERE recipe_id = ?");
+    $stmt->execute([$recipeId]);
+    return (int)$stmt->fetchColumn();
+}
+
+/**
+ * Check and award 10 favorites bonus
+ */
+function maybeAwardFavoritesBonus($recipeId, $ownerUserId) {
+    $count = getFavoritesCount($recipeId);
+    if ($count >= 10) {
+        awardPoints($ownerUserId, 20, 'bonus_10_favorites', $recipeId, ['count' => $count]);
+    }
+}
+
+/**
+ * Check 5-day consecutive approvals streak for a user and award once when achieved
+ */
+function maybeAwardFiveDayStreak($userId) {
+    $db = new Database();
+    // Get approvals in last 7 days
+    $stmt = $db->prepare("SELECT DATE(approved_at) as d FROM recipes WHERE user_id = ? AND approval_status = 'approved' AND approved_at IS NOT NULL AND approved_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) GROUP BY DATE(approved_at) ORDER BY d DESC");
+    $stmt->execute([$userId]);
+    $days = $stmt->fetchAll();
+    $dates = array_map(function($row){ return $row['d']; }, $days);
+    // Count consecutive days ending today
+    $streak = 0;
+    for ($i = 0; $i < 7; $i++) {
+        $date = date('Y-m-d', strtotime("-{$i} day"));
+        if (in_array($date, $dates)) {
+            $streak++;
+        } else {
+            break;
+        }
+    }
+    if ($streak >= 5) {
+        $key = 'streak5_' . date('Ymd');
+        try {
+            $stmt = $db->prepare("INSERT INTO user_achievements (user_id, key_name, details, created_at) VALUES (?, ?, ?, NOW())");
+            $stmt->execute([$userId, $key, json_encode(['streak' => $streak])]);
+            awardPoints($userId, 15, 'streak_5_days', null, ['streak' => $streak]);
+        } catch (Exception $e) {
+            error_log('streak check: ' . $e->getMessage());
+        }
+    }
 }
 
 /**

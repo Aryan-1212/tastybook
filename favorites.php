@@ -25,7 +25,7 @@ $stmt = $db->prepare("
     SELECT COUNT(*) 
     FROM favorites f
     JOIN recipes r ON f.recipe_id = r.id
-    WHERE f.user_id = ? AND r.is_published = 1
+    WHERE f.user_id = ? AND (r.approval_status = 'approved' OR (r.approval_status IS NULL AND r.is_published = 1))
 ");
 $stmt->execute([$userId]);
 $totalFavorites = $stmt->fetchColumn();
@@ -40,7 +40,7 @@ $stmt = $db->prepare("
     JOIN categories c ON r.category_id = c.id
     JOIN users u ON r.user_id = u.id
     LEFT JOIN reviews rev ON r.id = rev.recipe_id
-    WHERE f.user_id = ? AND r.is_published = 1
+    WHERE f.user_id = ? AND (r.approval_status = 'approved' OR (r.approval_status IS NULL AND r.is_published = 1))
     GROUP BY r.id
     ORDER BY f.created_at DESC
     LIMIT {$perPage} OFFSET {$offset}
